@@ -1,12 +1,12 @@
 # hexbot_priapo
 
-A [Hex](https://en.wikipedia.org/wiki/Hex_(board_game))-playing agent built around **Monte Carlo Tree Search with RAVE**, **virtual connections (bridges)** and **search-tree reuse**, written in pure Python (+ NumPy).
+A [Hex](https://en.wikipedia.org/wiki/Hex_(board_game))-playing agent built around **Monte Carlo Tree Search with RAVE**, **virtual connections (bridges)** and **search-tree reuse**, written in pure Python.
 
-It was developed for the AI course tournament at Universidad de San Andrés, where student agents competed on 13×13 boards under a TrueSkill rating system, with a fixed time budget per move and a 500 MB memory cap — constraints that shaped most of the design decisions below. Competing as **Príapo**, it finished **🥉 3rd out of 83 agents** in the [final standings](#tournament-results).
+It was originally developed for the Fundamentos de la Inteligencia Artificial course at Universidad de San Andrés, where student agents competed on 13×13 boards under a TrueSkill rating system, with a fixed time budget per move and a 500 MB memory cap (constraints that shaped most of the design decisions below). Competing as **Príapo**, it finished **🥉 3rd out of 83 agents** in the [final standings](#tournament-results). It was later refined for publication as a standalone project.
 
 ## Tournament results
 
-The agent competed as **Príapo** and finished **3rd out of 83 agents** in the final TrueSkill standings — with **0% errors and 0% timeouts**, and using roughly **half the iteration time** of the two agents that finished above it.
+The agent competed as **Príapo** and finished **3rd out of 83 agents** in the final TrueSkill standings, with **0% errors and 0% timeouts**, and using roughly **half the iteration time** of the two agents that finished above it.
 
 | # | Agent | Rating (μ ± σ) | Iteration time | Errors | Timeouts |
 |--:|:--|:--|--:|--:|--:|
@@ -139,8 +139,8 @@ The Union-Find is also memory-optimized: parent/rank tables live in compact `arr
 
 A *bridge* is the classic two-cell Hex template: two stones that are not adjacent but cannot be disconnected, because for each of the two empty "critical" cells the owner can always answer an intrusion by taking the other. The agent exploits bridges in two ways:
 
-- **Early rollout termination** — a second, *virtual* Union-Find additionally unions bridged stones. Rollouts stop as soon as a player is virtually connected, making simulations shorter and the search noticeably stronger for the same time budget.
-- **Deterministic defense** — bridges formed by the agent on the real board are stored, and if the opponent plays into a critical cell, the agent instantly answers with the sister cell without spending any search time. The saved time budget is still used: the agent runs the search anyway to grow the tree for future turns.
+- **Early rollout termination**: a second, *virtual* Union-Find additionally unions bridged stones. Rollouts stop as soon as a player is virtually connected, making simulations shorter and the search noticeably stronger for the same time budget.
+- **Deterministic defense**: bridges formed by the agent on the real board are stored, and if the opponent plays into a critical cell, the agent instantly answers with the sister cell without spending any search time. The saved time budget is still used: the agent runs the search anyway to grow the tree for future turns.
 
 ### Tree reuse
 
