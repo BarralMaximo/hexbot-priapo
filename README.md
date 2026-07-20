@@ -210,7 +210,3 @@ tests/              # pytest suite
 
 - Arneson, Hayward & Henderson — *Monte Carlo Tree Search in Hex* (IEEE T-CIAIG, 2010): MoHex, RAVE weighting and prior values.
 - Gelly & Silver — *Monte-Carlo tree search and rapid action value estimation in computer Go* (Artificial Intelligence, 2011): RAVE/AMAF.
-
-## License
-
-[MIT](LICENSE)
