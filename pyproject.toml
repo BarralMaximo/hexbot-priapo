@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hexbot_priapo"
+version = "1.0.0"
+description = "A Hex-playing agent based on MCTS with RAVE, virtual connections and deterministic bridge defense"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Máximo Barral" }]
+requires-python = ">=3.11"
+dependencies = ["numpy>=1.24"]
+keywords = ["hex", "mcts", "monte-carlo-tree-search", "rave", "game-ai"]
+classifiers = [
+    "Programming Language :: Python :: 3.11",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Games/Entertainment :: Board Games",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[tool.setuptools]
+packages = ["hex_mcts"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
