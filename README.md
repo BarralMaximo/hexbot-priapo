@@ -395,9 +395,3 @@ hexbot_priapo/
   MoHex, its RAVE weighting and prior values.
 - Sylvain Gelly and David Silver, *Monte-Carlo Tree Search and Rapid Action Value Estimation in Computer Go*. Artificial Intelligence, 2011.
   RAVE and AMAF.
-
----
-
-## 📄 License
-
-Released under the [MIT License](LICENSE). © 2025–2026 Máximo Barral.

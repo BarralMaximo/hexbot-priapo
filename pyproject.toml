@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "hexbot_priapo"
+name = "hexbot-priapo"
 version = "1.0.0"
 description = "A Hex-playing agent based on MCTS with RAVE, virtual connections and deterministic bridge defense"
 readme = "README.md"
