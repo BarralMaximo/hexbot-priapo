@@ -1,12 +1,52 @@
-# hexbot_priapo
+<div align="center">
 
-A [Hex](https://en.wikipedia.org/wiki/Hex_(board_game))-playing agent built around **Monte Carlo Tree Search with RAVE**, **virtual connections (bridges)** and **search-tree reuse**, written in pure Python.
+# ⬡ hexbot_priapo
 
-It was originally developed for the Fundamentos de la Inteligencia Artificial course at Universidad de San Andrés, where student agents competed on 13×13 boards under a TrueSkill rating system, with a fixed time budget per move and a 500 MB memory cap (constraints that shaped most of the design decisions below). Competing as **Príapo**, it finished **🥉 3rd out of 83 agents** in the [final standings](#tournament-results). It was later refined for publication as a standalone project.
+**A Hex-playing agent built on Monte Carlo Tree Search, written in pure Python.**
 
-## Tournament results
+It combines MCTS with RAVE, virtual connections (bridges) and search-tree reuse, all tuned to play
+well under a fixed time budget per move and a 500 MB memory cap. It finished **🥉 3rd out of 83 agents**
+in a university tournament, using about half the thinking time of the two agents above it.
 
-The agent competed as **Príapo** and finished **3rd out of 83 agents** in the final TrueSkill standings, with **0% errors and 0% timeouts**, and using roughly **half the iteration time** of the two agents that finished above it.
+![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)
+![License: MIT](https://img.shields.io/badge/license-MIT-green)
+![Dependencies](https://img.shields.io/badge/dependencies-numpy%20only-brightgreen)
+![Tests](https://img.shields.io/badge/tests-22%20passing-brightgreen?logo=pytest&logoColor=white)
+![Tournament](https://img.shields.io/badge/tournament-3rd%20of%2083-CD7F32)
+
+[Results](#-tournament-results) ·
+[Features](#-features) ·
+[Quick start](#-quick-start) ·
+[How MCTS works](#-how-mcts-works) ·
+[Beyond plain MCTS](#-beyond-plain-mcts) ·
+[Trade-offs](#-design-trade-offs) ·
+[Testing](#-testing)
+
+</div>
+
+---
+
+> [!NOTE]
+> **Academic origin.** The agent was first written for the **Fundamentos de la Inteligencia Artificial** course at
+> **Universidad de San Andrés** (UdeSA), Argentina. Student agents played each other on 13×13 boards and were ranked
+> with TrueSkill, with a fixed time budget per move and a 500 MB memory cap. Those constraints shaped most of the
+> design decisions below. The coursework was later refined into a standalone package with a library API, a CLI and a test suite.
+
+---
+
+## 🏆 Tournament results
+
+Competing as **Príapo**, the agent finished **3rd out of 83** in the final TrueSkill standings, with
+**0% errors** and **0% timeouts**. Its iteration time was **15.0 s**, against 27–28 s for the two agents that finished above it.
+
+<p align="center">
+  <img src="docs/tournament.svg" width="760"
+       alt="Scatter plot of TrueSkill rating against iteration time for the 83 ranked agents. Príapo sits third, at 15 seconds; the first and second place agents sit near 28 seconds.">
+</p>
+<p align="center"><sub>
+  Each dot is one ranked agent: higher means stronger, further right means slower.
+  Most of the top ten use more than 25 s; Príapo reaches the podium with about half of that.
+</sub></p>
 
 | # | Agent | Rating (μ ± σ) | Iteration time | Errors | Timeouts |
 |--:|:--|:--|--:|--:|--:|
@@ -115,45 +155,25 @@ The agent competed as **Príapo** and finished **3rd out of 83 agents** in the f
 
 </details>
 
-## How it works
+---
 
-The agent always sees itself as player `+1`, connecting the **left and right** edges (the runner transposes the board for the second player, a convention inherited from the tournament harness).
+## ✨ Features
 
-### MCTS + RAVE
+| | |
+|---|---|
+| 🌳 **MCTS + RAVE** | Time-bounded Monte Carlo Tree Search. Node selection blends UCT with all-moves-as-first statistics (the MoHex formula), so good moves stand out after few simulations. |
+| 🌉 **Virtual connections** | Detects *bridges*, the basic unbreakable two-cell template of Hex, and ends rollouts as soon as a player is virtually connected. |
+| 🛡️ **Instant bridge defense** | When the opponent intrudes into one of the agent's bridges, it answers with the sister cell without searching, then uses the turn's time to grow the tree anyway. |
+| ♻️ **Tree reuse** | The search tree survives between turns: the root follows the moves actually played, so earlier work keeps paying off. |
+| ⚡ **Fast win detection** | A Union-Find structure answers "has this player won?" with two `find` calls, which matters because every rollout asks after every stone. |
+| 🪶 **Small memory footprint** | Compact `array` buffers instead of Python lists cut memory use by about an order of magnitude and keep the agent under the 500 MB cap. |
+| 🐍 **Pure Python** | NumPy is the only dependency. Use it from the CLI or import it as a library. |
 
-The core is a time-bounded MCTS loop (selection / expansion / simulation / backpropagation). Plain UCT is slow to converge on Hex's large branching factor, so node selection blends the classic UCT score with **RAVE/AMAF** (all-moves-as-first) statistics, using the MoHex-style formula:
+---
 
-```
-score = (1 - w) · (Q + c·√(ln N / n))  +  w · Q_RAVE,      w = n_rave / (n_rave + n)
-```
+## 🚀 Quick start
 
-RAVE credits every cell played by the side to move anywhere inside a winning simulation, giving early, low-variance (if biased) estimates; the weight `w` fades RAVE out as real visit counts accumulate. RAVE counters are seeded with small pseudo-counts (8 visits / 4 wins, values from the MoHex paper) to smooth out early noise.
-
-### O(~1) win detection with Union-Find
-
-Every stone is unioned with its same-colored neighbors and with virtual edge nodes, so checking "did this player win?" costs two `find` operations instead of a graph traversal. Since MCTS runs thousands of rollouts per move and each rollout checks for a win after every stone, this is the single most performance-critical structure in the project.
-
-The Union-Find is also memory-optimized: parent/rank tables live in compact `array('H')` / `array('B')` buffers rather than Python lists, which cut the agent's memory footprint by roughly an order of magnitude (early list-based versions blew through the tournament's 500 MB cap).
-
-### Virtual connections (bridges)
-
-A *bridge* is the classic two-cell Hex template: two stones that are not adjacent but cannot be disconnected, because for each of the two empty "critical" cells the owner can always answer an intrusion by taking the other. The agent exploits bridges in two ways:
-
-- **Early rollout termination**: a second, *virtual* Union-Find additionally unions bridged stones. Rollouts stop as soon as a player is virtually connected, making simulations shorter and the search noticeably stronger for the same time budget.
-- **Deterministic defense**: bridges formed by the agent on the real board are stored, and if the opponent plays into a critical cell, the agent instantly answers with the sister cell without spending any search time. The saved time budget is still used: the agent runs the search anyway to grow the tree for future turns.
-
-### Tree reuse
-
-Between turns the root of the search tree is advanced along the moves actually played (by either side), so statistics gathered on previous turns keep working. Combined with the "enrich the tree during forced replies" trick above, the agent often starts a turn with a substantial tree already built.
-
-### Design trade-offs
-
-- **Overlapping bridges are discarded** (first detected wins). Handling overlaps exactly would require rebuilding the virtual Union-Find on each collision; the rare sub-optimal forced defense is a price worth paying.
-- **Virtual unions are never undone**, so a rollout can end on a "virtual win" whose critical cells were occupied later in that same rollout. This is a standard approximation: the affected player could have answered each intrusion when it happened.
-- **Once the agent is virtually connected**, every rollout ends instantly in a win and the search can no longer differentiate moves — so the virtual structure (and the tree built on it) is reset, forcing MCTS to find the concrete winning sequence.
-- **2-byte RAVE counters** (`array('H')`) keep per-node memory small; within realistic time budgets they never saturate, and backpropagation clamps them just in case.
-
-## Installation
+### Install
 
 ```bash
 git clone https://github.com/BarralMaximo/hexbot_priapo.git
@@ -161,17 +181,29 @@ cd hexbot_priapo
 pip install -e .          # or: pip install -e ".[dev]" to run the tests
 ```
 
-## Usage
+Requires Python 3.11 or later.
 
-Watch the agent beat a random player, play against it, or make it play itself:
+### Play from the terminal
 
-```bash
-python examples/play.py --opponent random --size 9 --time 2
-python examples/play.py --opponent human --size 7 --time 3
-python examples/play.py --opponent self --size 9 --time 1
+```text
+usage: play.py [--size N] [--time SECONDS] [--opponent {random,human,self}] [--agent-second]
+
+  --size          board side (default 9)
+  --time          agent seconds per move (default 2.0)
+  --opponent      who plays against the agent (default random)
+  --agent-second  let the opponent move first
 ```
 
-Or use it as a library:
+```bash
+python examples/play.py --opponent random --size 9 --time 2   # watch it beat a random player
+python examples/play.py --opponent human  --size 7 --time 3   # play against it
+python examples/play.py --opponent self   --size 9 --time 1   # let it play itself
+```
+
+The board is printed after every move. `X` connects left and right, `O` connects top and bottom,
+and each row is shifted to suggest the hexagonal grid. As a human player you enter moves as `row col`.
+
+### Use it as a library
 
 ```python
 import numpy as np
@@ -180,37 +212,192 @@ from hex_mcts import MCTSAgent, RandomAgent, play_match
 agent = MCTSAgent(board_size=9, time_limit=2.0)
 winner = play_match(agent, RandomAgent(), size=9, verbose=True)
 
-# Lower-level: ask for a move on any position (agent is +1, left-right)
+# Lower-level: ask for a move on any position (the agent is +1 and connects left-right)
 board = np.zeros((9, 9), dtype=int)
 move = agent.action(board)          # flat index: row * 9 + col
 ```
 
-## Tests
+The agent always sees itself as player `+1`, connecting the **left and right** edges. When it plays second,
+`play_match` hands it a transposed, sign-flipped board. This convention comes from the tournament harness.
+
+---
+
+## 🌳 How MCTS works
+
+A 13×13 Hex board has 169 cells and games run for dozens of moves, so exploring every line of play, as minimax does, is
+out of the question. Writing a good evaluation function for Hex positions by hand is also hard.
+**Monte Carlo Tree Search** avoids both problems. Instead of judging positions, it **plays many quick random games**
+from the current one and keeps statistics on which moves led to wins. Moves that look promising get explored more, so the
+effort goes where it matters.
+
+The search builds a tree rooted at the current position. Each node is a position reached by one move, and it stores how many
+simulations passed through it (*visits*) and how many of those were won (*wins*). Each iteration of the search has four phases:
+
+<p align="center">
+  <img src="docs/mcts-phases.svg" width="840"
+       alt="The four phases of an MCTS iteration. Selection: a path is chosen from the root down to a leaf. Expansion: a new child node is added below it. Simulation: a random game is played from the new node until there is a result. Backpropagation: every node on the path, from the new node back to the root, is updated with +1.">
+</p>
+
+1. **Selection.** Start at the root and walk down the tree. At each node, pick the child with the best score, which balances
+   *exploitation* (children that win often) against *exploration* (children tried only a few times, whose estimate is still unreliable).
+2. **Expansion.** When the walk reaches a node with moves not yet in the tree, add one of them as a new child.
+3. **Simulation.** From the new node, play random moves until the game ends. Hex has no draws, so every simulation (also called a *rollout*) has a winner.
+4. **Backpropagation.** Walk back up to the root. Every node on the path gets one more visit, and one more win if its player won the rollout.
+
+The loop repeats until the time budget runs out, and then the agent plays the root's **most visited** move. The visit count
+is a more reliable signal than the win rate, because selection only keeps returning to a move while it keeps looking good.
+
+One random game says almost nothing about a position, but thousands of them do. The win rates converge toward the real
+strength of each move, and the tree grows deepest along the lines that matter.
+
+The classic selection score is **UCT** (Upper Confidence bounds applied to Trees):
+
+```text
+UCT = Q + c · √(ln N / n)
+
+  Q   win rate of the child             n   visits of the child
+  N   visits of the parent              c   exploration constant (0.2 here)
+```
+
+The first term rewards moves that have won so far. The second shrinks as a child gets visited, so a move that has been tried
+only a few times keeps getting a chance.
+
+---
+
+## 🧠 Beyond plain MCTS
+
+Plain MCTS plays reasonable Hex, but on a 13×13 board with a fixed time per move it learns too slowly. Each addition below makes
+the time budget go further. This is what happens on every turn:
+
+```mermaid
+flowchart TD
+    A["Opponent's move arrives<br/>(diff against the internal board)"] --> B["Advance the tree root<br/>to the move just played"]
+    B --> C{"Did it intrude into<br/>one of our bridges?"}
+    C -- yes --> D["Answer with the sister cell<br/>(no search needed)"]
+    D --> E["Search anyway, to grow the tree<br/>for the next turns"]
+    C -- no --> F{"Already virtually<br/>connected?"}
+    F -- yes --> G["Reset the virtual connections<br/>and the tree"]
+    F -- no --> H["MCTS + RAVE search<br/>until the time budget runs out"]
+    G --> H
+    H --> I["Play the most visited move<br/>and advance the root again"]
+```
+
+### 1. RAVE: learning from every move of a rollout
+
+A rollout plays dozens of moves, but plain MCTS only learns about the one move that leads to the new node.
+**RAVE** (Rapid Action Value Estimation) also credits every other move the same player made during the rollout, assuming that a
+move that helped win later in the game would probably help if played now (*all moves as first*, or AMAF). That estimate is biased,
+but it is available after very few simulations. Selection blends the two:
+
+```text
+score = (1 − w) · (Q + c·√(ln N / n))  +  w · Q_RAVE        w = n_RAVE / (n_RAVE + n)
+```
+
+While a child has few real visits, `w` is close to 1 and the fast RAVE estimate drives the search. As real visits pile up, `w`
+shrinks and the exact UCT estimate takes over. RAVE counters start with small pseudo-counts (8 visits, 4 wins, values from the
+MoHex paper) so the first few rollouts don't swing the estimates too much.
+
+### 2. Bridges: virtual connections
+
+A **bridge** is the most basic connection template in Hex: two stones that are not adjacent but share two empty neighbors.
+If the opponent takes one of those cells, the owner takes the other, so the two stones cannot be cut apart.
+
+```text
+   X   a            X     the agent's stones
+     b   X          a, b  the two shared empty cells (critical cells)
+
+   O plays a   →   the agent plays b   →   both X stones stay connected
+```
+
+The agent uses bridges in two ways:
+
+- **Shorter rollouts.** A second, *virtual* Union-Find also joins bridged stones. A rollout stops as soon as one player is
+  virtually connected from edge to edge, because the rest of that game is a formality. Shorter rollouts mean more of them
+  in the same time, and a stronger search.
+- **Instant defense.** The agent remembers the bridges it builds on the real board. If the opponent plays into a critical
+  cell, the agent answers with the other one immediately. The turn's time budget is not wasted: the agent still runs the
+  search, only to grow the tree for the following turns.
+
+### 3. Tree reuse
+
+After every move, played by either side, the root of the tree moves down to the matching child, and the rest of the tree is
+dropped. The statistics gathered for that subtree on earlier turns stay valid, so the agent often starts a turn with a large tree
+already built. The forced bridge replies feed this too, because their search time goes entirely into the tree.
+
+### 4. Union-Find win detection
+
+Every stone is joined to its same-colored neighbors, and stones on an edge are also joined to a virtual node for that edge.
+Checking "has this player won?" then comes down to asking whether the two edge nodes are in the same set: two `find` calls
+instead of a graph traversal. Rollouts check for a win after every stone, thousands of times per move, so this is the most
+performance-critical structure in the project.
+
+The Union-Find is also built for memory. Parent and rank tables live in compact `array('H')` and `array('B')` buffers instead of
+Python lists. That cut the agent's memory use by about an order of magnitude: early versions that used lists went over the
+tournament's 500 MB cap.
+
+---
+
+## 🧩 Design trade-offs
+
+These shortcuts are deliberate. Each one trades a rare loss in accuracy for speed or memory.
+
+| Shortcut | Why it is acceptable |
+|---|---|
+| **Overlapping bridges are discarded** (the first one detected wins) | Handling overlaps exactly would mean rebuilding the virtual Union-Find on every collision. The occasional sub-optimal forced reply is cheaper. |
+| **Virtual unions are never undone** | A rollout can end on a "virtual win" whose critical cells were filled later in that same rollout. This is a standard approximation: the player could have answered each intrusion when it happened. |
+| **Virtual connections reset once the agent is connected** | From then on every rollout would end in an instant win and the search could no longer tell moves apart. Resetting forces MCTS to find the concrete winning sequence. |
+| **2-byte RAVE counters** (`array('H')`) | They keep per-node memory small. Within realistic time budgets they never reach their limit, and backpropagation clamps them just in case. |
+
+---
+
+## 🧪 Testing
 
 ```bash
-pytest
+pip install -e ".[dev]"
+pytest              # 22 tests, about 2 seconds
 ```
 
-The suite covers the Union-Find, board rules and win detection, bridge detection/defense, and end-to-end agent behavior (legal play, forced bridge answers, beating a random baseline).
+| File | What it covers |
+|---|---|
+| [`test_union_find.py`](tests/test_union_find.py) | Disjoint sets, transitivity, compact array types, independent copies |
+| [`test_board.py`](tests/test_board.py) | Move placement and turns, wins for both players, diagonal connections, incomplete chains |
+| [`test_bridges.py`](tests/test_bridges.py) | Bridge detection, sister-cell responses, bookkeeping after intrusions, virtual wins |
+| [`test_mcts.py`](tests/test_mcts.py) | Legal moves, finding an immediate win, forced bridge defense, beating a random player |
 
-## Project structure
+---
 
+## 📁 Project layout
+
+```text
+hexbot_priapo/
+├── hex_mcts/
+│   ├── agent.py        # MCTSAgent: turn orchestration, bridge defense, tree reuse
+│   ├── mcts.py         # MCTS engine and tree nodes with RAVE statistics
+│   ├── board.py        # board rules, Union-Find win detection, bridge templates
+│   ├── union_find.py   # memory-compact DSU (union by rank + path compression)
+│   └── match.py        # standalone match runner and ASCII rendering
+├── examples/
+│   └── play.py         # CLI: agent vs. random / human / itself
+├── tests/              # pytest suite
+├── docs/               # README figures
+└── pyproject.toml
 ```
-hex_mcts/
-├── agent.py        # MCTSAgent: turn orchestration, bridge defense, tree reuse
-├── mcts.py         # MCTS engine + tree nodes with RAVE statistics
-├── board.py        # Board rules, Union-Find win detection, bridge templates
-├── union_find.py   # Memory-compact DSU (union by rank + path compression)
-└── match.py        # Standalone match runner + ASCII rendering
-examples/play.py    # CLI: agent vs random / human / itself
-tests/              # pytest suite
-```
 
-## References
+---
 
-- Arneson, Hayward & Henderson — *Monte Carlo Tree Search in Hex* (IEEE T-CIAIG, 2010): MoHex, RAVE weighting and prior values.
-- Gelly & Silver — *Monte-Carlo tree search and rapid action value estimation in computer Go* (Artificial Intelligence, 2011): RAVE/AMAF.
+## 📖 References
 
-## License
+- Cameron Browne et al., *A Survey of Monte Carlo Tree Search Methods*. IEEE Transactions on Computational Intelligence and AI in Games, 2012.
+  A broad introduction to MCTS and its variants.
+- Levente Kocsis and Csaba Szepesvári, *Bandit Based Monte-Carlo Planning*. ECML, 2006.
+  The paper that introduced UCT.
+- Broderick Arneson, Ryan Hayward and Philip Henderson, *Monte Carlo Tree Search in Hex*. IEEE Transactions on Computational Intelligence and AI in Games, 2010.
+  MoHex, its RAVE weighting and prior values.
+- Sylvain Gelly and David Silver, *Monte-Carlo Tree Search and Rapid Action Value Estimation in Computer Go*. Artificial Intelligence, 2011.
+  RAVE and AMAF.
 
-[MIT](LICENSE)
+---
+
+## 📄 License
+
+Released under the [MIT License](LICENSE). © 2025–2026 Máximo Barral.
